@@ -6,4 +6,8 @@ Rake::TestTask.new do |t|
   t.verbose = true
 end
 
-task default: :test
+task default: ["lib/tp/parser.rb", :test]
+
+file "lib/tp/parser.rb" => ["generators/parser.y"] do |t|
+  sh "racc -l -t -v -o lib/tp/parser.rb generators/parser.y"
+end

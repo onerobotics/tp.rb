@@ -2,7 +2,7 @@ module TP
   class Scanner
     class Error < Struct.new(:line, :column, :msg) ; end
 
-    attr_reader :errors
+    attr_reader :errors, :current_line, :current_column, :token_line, :token_column
     def initialize(src="")
       self.scan_setup(src)
     end
@@ -27,6 +27,8 @@ module TP
 
       @brack = 0
       @paren = 0
+
+      @last_tok = nil
 
       @state  = []
       @errors = []
@@ -209,6 +211,38 @@ module TP
       return @src[offs, (@offset-offs-1)]
     end
 
+    def scan_comment
+      # opening ! already consumed
+      offs = @offset
+
+      while @ch != ";" && @ch != -1
+        self.next
+      end
+
+      return @src[offs, (@offset-offs)]
+    end
+
+    def scan_remark
+      # opening / already consumed
+      self.next # consume next /
+      offs = @offset
+
+      while @ch != ";" && @ch != -1
+        self.next
+      end
+
+      return @src[offs, (@offset-offs)]
+    end
+
+    def scan_real
+      offs = @offset-1 # initial . already consumed
+      while self.is_digit?(@ch)
+        self.next
+      end
+
+      return @src[offs, (@offset-offs)]
+    end
+
     def scan_number
       offs = @offset
       tok = nil
@@ -241,6 +275,16 @@ module TP
       return [tok, s]
     end
 
+    def scan_sysvar
+      offs = @offset-1 # initial $ already consumed
+
+      while self.is_letter?(@ch) || @ch == "." || @ch == "[" || @ch == "]" || self.is_digit?(@ch) || @ch == "$"
+        self.next
+      end
+
+      return @src[offs, (@offset-offs)]
+    end
+
     def scan_pos_ident
       offs = @offset
 
@@ -256,6 +300,19 @@ module TP
         tok = TP::Token.lookup_pos(s)
       end
 
+      return [tok, s]
+    end
+
+    def scan_pos_or_end
+      # initial / already consumed
+      offs = @offset - 1
+
+      while self.is_letter?(@ch)
+        self.next
+      end
+
+      s = @src[offs, @offset-offs]
+      tok = TP::Token.lookup_section(s)
       return [tok, s]
     end
 
@@ -323,7 +380,7 @@ module TP
             tok = :STRING
             lit = self.scan_string(ch)
           when "-"
-            tok = :MINUS
+            tok = :SUB
           when ":"
             tok = :COLON
           when ","
@@ -340,12 +397,71 @@ module TP
           tok, lit = self.scan_token
         elsif is_digit?(ch)
           tok, lit = self.scan_number
-        elsif ch == "/"
-          self.pop_state
-          tok, lit = self.scan_section
         else
           self.next
+
+          if ch == "\n"
+            self.skip_newlines
+            self.next
+            ch = @ch
+          end
+
           case ch
+          when "!"
+            if @last_tok == :COLON
+              tok = :COMMENT
+              lit = self.scan_comment
+            else
+              tok = :NOT
+              lit = ch
+            end
+          when "/"
+            if @last_tok == :SEMICOLON
+              tok, lit = self.scan_pos_or_end
+              if tok != :IDENT
+                self.pop_state
+                self.push_state(tok)
+              end
+            elsif @last_tok == :COLON && @ch == "/"
+              tok = :REMARK
+              lit = self.scan_remark
+            else
+              tok = :QUO
+            end
+          when "$"
+            if self.is_letter?(@ch)
+              tok = :SYSVAR
+              lit = self.scan_sysvar
+            else
+              tok = :ILLEGAL
+              lit = ch
+            end
+          when '='
+            tok = :EQL
+          when '<'
+            case @ch
+            when ">"
+              tok = :NEQL
+              self.next
+            when "="
+              tok = :LTE
+              self.next
+            else
+              tok = :LT
+            end
+          when ">"
+            case @ch
+            when "="
+              tok = :GTE
+              self.next
+            else
+              tok = :GT
+            end
+          when "*"
+            tok = :MUL
+          when "'"
+            tok = :STRING
+            lit = self.scan_string(ch)
           when "["
             tok = :LBRACK
             @brack += 1
@@ -372,6 +488,20 @@ module TP
             tok = :SEMICOLON
           when ","
             tok = :COMMA
+          when "-"
+            tok = :SUB
+          when "+"
+            tok = :ADD
+          when "%"
+            tok = :PERCENT
+          when "."
+            if self.is_digit?(@ch)
+              tok = :REAL
+              lit = self.scan_real
+            else
+              tok = :ILLEGAL
+              lit = ch
+            end
           else
             tok = :ILLEGAL
             lit = ch
@@ -406,7 +536,7 @@ module TP
           when "="
             tok = :EQL
           when "-"
-            tok = :MINUS
+            tok = :SUB
           when ";"
             tok = :SEMICOLON
           else
@@ -416,14 +546,11 @@ module TP
         end
       else
         self.next # always make progress
-        case ch
-        when "foo"
-          # do something
-        else
-          tok = :ILLEGAL
-          lit = ch
-        end
+        tok = :ILLEGAL
+        lit = ch
       end
+
+      @last_tok = tok
 
       return [tok, lit]
     end

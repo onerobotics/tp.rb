@@ -29,6 +29,7 @@ module TP
     SECTION_TOKENS = {
       "/PROG" => :SECTION_PROG,
       "/ATTR" => :SECTION_ATTR,
+      "/APPL" => :SECTION_APPL,
       "/MN"   => :SECTION_MN,
       "/POS"  => :SECTION_POS,
       "/END"  => :SECTION_END
@@ -45,8 +46,10 @@ module TP
       "GO"             => :GO,
       "LBL"            => :LBL,
       "P"              => :POSITION,
+      "PAYLOAD"        => :PAYLOAD,
       "PR"             => :POSREG,
       "R"              => :NUMREG,
+      "RESUME_PROG"    => :RESUME_PROG,
       "RI"             => :RI,
       "RO"             => :RO,
       "RSR"            => :RSR,
@@ -54,6 +57,9 @@ module TP
       "TIMER"          => :TIMER,
       "TIMER_OVERFLOW" => :TIMER_OVERFLOW,
       "UALM"           => :UALM,
+      "UFRAME"         => :UFRAME,
+      "UTOOL"          => :UTOOL,
+      "VR"             => :VR
     }
 
     TOKENS = {
@@ -85,7 +91,7 @@ module TP
       "JMP"           => :JMP,
       "L"             => :L,
       "LOCK"          => :LOCK,
-      "LPOS"          => :POS,
+      "LPOS"          => :LPOS,
       "max_speed"     => :MAX_SPEED,
       "MOD"           => :MOD,
       "MONITOR"       => :MONITOR,
@@ -96,12 +102,10 @@ module TP
       "OR"            => :OR,
       "OVERRIDE"      => :OVERRIDE,
       "PAUSE"         => :PAUSE,
-      "PAYLOAD"       => :PAYLOAD,
       "POINT_LOGIC"   => :POINT_LOGIC,
       "PREG"          => :PREG,
       "PTH"           => :PTH,
       "PULSE"         => :PULSE,
-      "RESUME_PROG"   => :RESUME_PROG,
       "RT_LD"         => :RT_LD,
       "RUN"           => :RUN,
       "SELECT"        => :SELECT,
@@ -123,7 +127,7 @@ module TP
       "VREG"          => :VREG,
       "WAIT"          => :WAIT,
 
-      "cm/sec"        => :CM_SEC,
+      "cm/min"        => :CM_MIN,
       "deg/sec"       => :DEG_SEC,
       "mm"            => :MM,
       "mm/sec"        => :MM_SEC,

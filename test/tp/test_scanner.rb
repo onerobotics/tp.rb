@@ -96,9 +96,9 @@ CONTROL_CODE	= 00000000 00000000;
     assert_token :EQL
     assert_token :ATTR_DATE
     assert_pair :INT, "14"
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :INT, "01"
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :INT, "02"
     assert_token :ATTR_TIME
     assert_pair :INT, "23"
@@ -112,9 +112,9 @@ CONTROL_CODE	= 00000000 00000000;
     assert_token :EQL
     assert_token :ATTR_DATE
     assert_pair :INT, "14"
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :INT, "01"
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :INT, "02"
     assert_token :ATTR_TIME
     assert_pair :INT, "23"
@@ -211,7 +211,7 @@ CONTROL_CODE	= 00000000 00000000;
   def test_tokens
     s = "/MN\n:;"
     TP::Token::TOKENS.each_key do |string|
-      s += string + " \t\r\n"
+      s += string + " ;\t\r\n"
     end
     s += "/POS"
     @scanner.scan_setup s
@@ -220,6 +220,7 @@ CONTROL_CODE	= 00000000 00000000;
     assert_token :SEMICOLON
     TP::Token::TOKENS.each_value do |tok|
       assert_token tok
+      assert_token :SEMICOLON
     end
     assert_token :SECTION_POS
     assert_state :SECTION_POS
@@ -293,7 +294,7 @@ P[2:"via"]{
 
     assert_token :W
     assert_token :EQL
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :REAL, "68.197"
     assert_token :DEG
     assert_token :COMMA
@@ -306,7 +307,7 @@ P[2:"via"]{
 
     assert_token :R
     assert_token :EQL
-    assert_token :MINUS
+    assert_token :SUB
     assert_pair :REAL, "3.196"
     assert_token :DEG
 
@@ -364,7 +365,7 @@ P[2:"via"]{
   end
 
   def test_punctuation
-    @scanner.scan_setup %q(/MN ()[],;)
+    @scanner.scan_setup "/MN () \n [],;: = <> < > <= >= ! - + / * %"
     assert_token :SECTION_MN
     assert_token :LPAREN
     assert_token :RPAREN
@@ -372,6 +373,20 @@ P[2:"via"]{
     assert_token :RBRACK
     assert_token :COMMA
     assert_token :SEMICOLON
+    assert_token :COLON
+    assert_token :EQL
+    assert_token :NEQL
+    assert_token :LT
+    assert_token :GT
+    assert_token :LTE
+    assert_token :GTE
+    assert_token :NOT
+    assert_token :SUB
+    assert_token :ADD
+    assert_token :QUO
+    assert_token :MUL
+    assert_token :PERCENT
+    assert_nil @scanner.next_token
   end
 
   def test_unmatched_paren_error
@@ -384,6 +399,41 @@ P[2:"via"]{
     @scanner.scan_setup "/MN []]"
     while @scanner.next_token != nil ; end
     assert_equal "unmatched ]", @scanner.errors.first.msg
+  end
+
+  def test_scan_comment
+    @scanner.scan_setup "/MN : ! foo;"
+    assert_token :SECTION_MN
+    assert_token :COLON
+    assert_pair :COMMENT, " foo"
+  end
+
+   def test_scan remark
+     @scanner.scan_setup "/MN : // foo;"
+     assert_token :SECTION_MN
+     assert_token :COLON
+     assert_pair :REMARK, " foo"
+   end
+
+  def test_scan_string
+    @scanner.scan_setup "/MN 'foo bar'"
+    assert_token :SECTION_MN
+    assert_pair :STRING, "foo bar"
+  end
+
+  def test_scan_sysvars
+    @scanner.scan_setup "/MN $foo $foo.$bar $foo[1] $foo[1].$bar[3]"
+    assert_token :SECTION_MN
+    assert_pair :SYSVAR, "$foo"
+    assert_pair :SYSVAR, "$foo.$bar"
+    assert_pair :SYSVAR, "$foo[1]"
+    assert_pair :SYSVAR, "$foo[1].$bar[3]"
+  end
+
+  def test_scan_real_with_no_leading_zero
+    @scanner.scan_setup "/MN .05"
+    assert_token :SECTION_MN
+    assert_pair :REAL, ".05"
   end
 
 end
