@@ -59,41 +59,67 @@ rule
 
   attr_section
     : SECTION_ATTR
-      attributes
-    | SECTION_ATTR
-    |
+      attributes        { result = val[1] }
+    | SECTION_ATTR      { result = {} }
+    |                   { result = {} }
     ;
 
   attributes
     : attribute SEMICOLON
+                        { result = val[0] }
     | attributes attribute SEMICOLON
+                        { result = val[0].merge(val[1]) }
     ;
 
   attribute
     : ATTR_OWNER EQL ATTR_ASCBIN
+                        { result = { val[0] => val[2] } }
     | ATTR_COMMENT EQL STRING
+                        { result = { val[0] => val[2] } }
     | ATTR_PROG_SIZE EQL INT
+                        { result = { val[0] => val[2] } }
     | ATTR_CREATE EQL date_time
+                        { result = { val[0] => val[2] } }
     | ATTR_MODIFIED EQL date_time
+                        { result = { val[0] => val[2] } }
     | ATTR_FILE_NAME EQL IDENT
+                        { result = { val[0] => val[2] } }
     | ATTR_VERSION EQL INT
+                        { result = { val[0] => val[2] } }
     | ATTR_LINE_COUNT EQL INT
+                        { result = { val[0] => val[2] } }
     | ATTR_MEMORY_SIZE EQL INT
+                        { result = { val[0] => val[2] } }
     | ATTR_PROTECT EQL ATTR_READ_WRITE
+                        { result = { val[0] => val[2] } }
     | ATTR_TCD COLON ATTR_STACK_SIZE EQL INT COMMA
         ATTR_TASK_PRIORITY EQL INT COMMA
         ATTR_TIME_SLICE EQL INT COMMA
         ATTR_BUSY_LAMP_OFF EQL INT COMMA
         ATTR_ABORT_REQUEST EQL INT COMMA
         ATTR_PAUSE_REQUEST EQL INT
+                        { result = {
+                                     val[0] => {
+                                       val[2] => val[4],
+                                       val[6] => val[8],
+                                       val[10] => val[12],
+                                       val[14] => val[16],
+                                       val[18] => val[20],
+                                       val[22] => val[24]
+                                     }
+                                   }
+                        }
     | ATTR_DEFAULT_GROUP EQL group_mask
+                        { result = { val[0] => val[2] } }
     | ATTR_CONTROL_CODE EQL INT INT
+                        { result = { val[0] => [val[2], val[3]] } }
     ;
 
   group_mask
     : int_or_mul COMMA int_or_mul COMMA
       int_or_mul COMMA int_or_mul COMMA
       int_or_mul
+                        { result = [val[0],val[2],val[4],val[6]] }
     ;
 
   int_or_mul
@@ -107,7 +133,7 @@ rule
     ;
 
   appl_section
-    : SECTION_APPL
+    : SECTION_APPL # TODO: implement
     | # this section is optional
     ;
 
@@ -117,17 +143,18 @@ rule
     ;
 
   lines
-    : line
-    | lines line
+    : line              { result = [val[0]] }
+    | lines line        { result = val[0].push(val[1]) }
     ;
 
   line
     : COLON statement SEMICOLON
+                        { result = Statement.new(val[1]) }
     ;
 
   statement
     : # could be empty
-    | COMMENT
+    | COMMENT           { result = Comment.new(val[0]) }
     | label_stmt
     | jump_stmt
     | call_stmt
@@ -143,10 +170,10 @@ rule
     | ualm_stmt
     | override_stmt
     | sysvar_assignment
-    | REMARK
+    | REMARK            { result = Remark.new(val[0]) }
     | skip_stmt
     | payload_stmt
-    | STOP_TRACKING
+    | STOP_TRACKING     { result = StopTrackingStmt.new }
     | offset_condition_stmt
     | uframe_num_stmt
     | utool_num_stmt
@@ -379,8 +406,11 @@ rule
 
   offset_condition_stmt
     : OFFSET CONDITION posreg
+                        { result = OffsetConditionStmt.new(val[0], val[2]) }
     | TOOL_OFFSET CONDITION posreg
+                        { result = OffsetConditionStmt.new(val[0], val[2]) }
     | VOFFSET CONDITION vr
+                        { result = OffsetConditionStmt.new(val[0], val[2]) }
     ;
 
   vr
@@ -388,20 +418,26 @@ rule
     ;
 
   payload_stmt
-    : PAYLOAD index
+    : PAYLOAD index     { result = PayloadStmt.new(val[1][:id]) }
     ;
 
   skip_stmt
     : SKIP CONDITION comparison # this may not be valid TP
+                        { result = SkipStmt.new(val[2]) }
     ;
 
   posreg_assignment
-    : posreg EQL posreg
-    | posreg EQL position
-    | posreg EQL LPOS
-    | posreg EQL JPOS
-    | posreg EQL sysvar
+    : posreg EQL posreg_assignable
+                        { result = Assignment.new(val[0], val[2]) }
     ;
+
+  posreg_assignable
+   : posreg
+   | position
+   | lpos
+   | jpos
+   | sysvar
+   ;
 
   position
     : POSITION index
@@ -409,21 +445,26 @@ rule
 
   sysvar_assignment
     : sysvar EQL numeric
+                        { result = Assignment.new(val[0], val[2]) }
     | sysvar EQL posreg
+                        { result = Assignment.new(val[0], val[2]) }
     ;
 
   override_stmt
     : OVERRIDE EQL numreg
+                        { result = OverrideStmt.new(val[2]) }
     | OVERRIDE EQL int PERCENT
-    | OVERRIDE EQL arg
+                        { result = OverrideStmt.new(val[2]) }
+    | OVERRIDE EQL arg  { result = OverrideStmt.new(val[2]) }
     ;
 
   ualm_stmt
-    : UALM index
+    : UALM index        { result = UalmStmt.new(val[1][:id]) }
     ;
 
   rsr_stmt
     : rsr EQL enable_or_disable
+                        { result = RsrStmt.new(val[0], val[2]) }
     ;
 
   enable_or_disable
@@ -433,28 +474,45 @@ rule
 
   wait_stmt
     : WAIT real LPAREN SEC RPAREN
+                        { result = DelayStmt.new(val[1]) }
     | WAIT numreg
+                        { result = DelayStmt.new(val[1]) }
     | WAIT comparison timeout_lbl
+                        { result = WaitStmt.new(val[1], val[2]) }
     | WAIT paren_bool_exp timeout_lbl
+                        { result = WaitStmt.new(val[1], val[2]) }
     ;
 
   timeout_lbl
     : # optional
     | TIMEOUT COMMA label
+                        { result = val[2] }
     ;
 
   select_stmt
     : SELECT numreg EQL numeric COMMA call_or_jmp
+                        { result = SelectStmt.new(val[1], val[3], val[5]) }
     | EQL numeric COMMA call_or_jmp
+                        { result = SelectCase.new(val[1], val[3]) }
     | ELSE COMMA call_or_jmp
+                        { result = SelectElse.new(val[2]) }
     ;
 
   if_stmt
     : IF comparison COMMA call_or_jmp
+                        { result = If.new(val[1], val[3]) }
     | IF paren_bool_exp COMMA call_or_jmp
+                        { result = If.new(val[1], val[3]) }
     | IF paren_bool_exp COMMA inline_assignment
-    | IF LPAREN comparison RPAREN COMMA call_or_jmp
-    | IF LPAREN comparison RPAREN COMMA inline_assignment
+                        { result = If.new(val[1], val[3]) }
+    | IF paren_comparison COMMA call_or_jmp
+                        { result = If.new(val[1], val[3]) }
+    | IF paren_comparison COMMA inline_assignment
+                        { result = If.new(val[1], val[3]) }
+    ;
+
+  paren_comparison
+    : LPAREN comparison RPAREN
     ;
 
   inline_assignment
@@ -497,41 +555,52 @@ rule
     ;
 
   label_stmt
-    : LBL direct_index
+    : LBL direct_index  { result = Label.new(val[1]) }
     ;
 
   jump_stmt
-    : JMP label
+    : JMP label         { result = Jump.new(val[1]) }
     ;
 
   call_stmt
-    : CALL IDENT
+    : CALL IDENT        { result = Call.new(val[1]) }
     | CALL IDENT LPAREN params RPAREN
-    | CALL sreg
+                        { result = Call.new(val[1], val[3]) }
+    | CALL sreg         { result = Call.new(val[1]) }
     ;
 
   run_stmt
-    : RUN IDENT
+    : RUN IDENT         { result = Run.new(val[1]) }
     | RUN IDENT LPAREN params RPAREN
-    | RUN sreg
+                        { result = Run.new(val[1], val[3]) }
+    | RUN sreg          { result = Run.new(val[1]) }
     ;
 
   numreg_assignment
     : numreg EQL numeric_assignable
+                        { result = Assignment.new(val[0], val[2]) }
     ;
 
   boolean_output_assignment
     : boolean_output EQL bool
-    | boolean_output EQL PULSE
-    | boolean_output EQL PULSE COMMA REAL SEC
+                        { result = Assignment.new(val[0], val[2]) }
+    | boolean_output EQL pulse
+                        { result = Assignment.new(val[0], val[2]) }
     | boolean_output EQL paren_bool_exp
+                        { result = Assignment.new(val[0], val[2]) }
+    ;
+
+  pulse
+    : PULSE
+    | PULSE COMMA REAL SEC
     ;
 
   # for IF (),DO[x]=(ON) ;
   inline_boolean_output_assignment
     : boolean_output EQL paren_bool_exp
-    | boolean_output EQL PULSE
-    | boolean_output EQL PULSE COMMA REAL SEC
+                        { result = Assignment.new(val[0], val[2]) }
+    | boolean_output EQL pulse
+                        { result = Assignment.new(val[0], val[2]) }
     ;
 
   paren_bool_exp
@@ -582,6 +651,7 @@ rule
 
   component_assignment
     : posreg_component EQL numeric_assignable
+                        { result = Assignment.new(val[0], val[2]) }
     ;
 
   numeric_assignable
@@ -669,8 +739,9 @@ rule
     ;
 
   params
-    : param
+    : param             { result = [val[0]] }
     | params COMMA param
+                        { result = val[0].push(val[2]) }
     ;
 
   param
@@ -684,13 +755,14 @@ rule
     ;
 
   label
-    : LBL index
+    : LBL index         { result = Label.new(val[1]) }
     ;
 
   # the inner part of DATA[] that doesn't allow indirection
   direct_index
-    : LBRACK int RBRACK
+    : LBRACK int RBRACK { result = { id: val[1] } }
     | LBRACK int COLON IDENT RBRACK
+                        { result = { id: val[1], comment: val[3] } }
     ;
 
   # the inner part of DATA[] that can be indirected
@@ -701,7 +773,8 @@ rule
 
   indirect_index
     : LBRACK numreg RBRACK
-    | LBRACK arg RBRACK
+                        { result = { id: val[1] } }
+    | LBRACK arg RBRACK { result = { id: val[1] } }
     ;
 
   numreg
@@ -725,7 +798,7 @@ rule
     ;
 
   rsr
-    : RSR index
+    : RSR index         { result = val[1][:id] }
     ;
 
   gout
